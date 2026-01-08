@@ -6,7 +6,7 @@ Sonic: Shifting Focus to Global Audio Perception in Portrait Animation, CVPR 202
 <a href="http://demo.sonic.jixiaozhong.online/" style="margin: 0 2px;">
     <img src='https://img.shields.io/badge/Demo-Gradio-gold?style=flat&logo=Gradio&logoColor=red' alt='Demo'>
   </a>
-<a href='https://arxiv.org/pdf/2411.16331'><img src='https://img.shields.io/badge/Paper-Arxiv-red'></a>
+<a href='https://openaccess.thecvf.com/content/CVPR2025/papers/Ji_Sonic_Shifting_Focus_to_Global_Audio_Perception_in_Portrait_Animation_CVPR_2025_paper.pdf'><img src='https://img.shields.io/badge/Paper-Arxiv-red'></a>
   <a href="https://huggingface.co/spaces/xiaozhongji/Sonic" style="margin: 0 2px;">
     <img src='https://img.shields.io/badge/Space-ZeroGPU-orange?style=flat&logo=Gradio&logoColor=red' alt='Demo'>
     </a>
