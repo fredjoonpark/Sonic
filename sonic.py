@@ -230,10 +230,11 @@ class Sonic():
                 f"Do not support weight dtype: {config.weight_dtype} during training"
             )
 
-        # MPS: bf16 is not well supported, fall back to fp16
-        if is_mps and weight_dtype == torch.bfloat16:
-            print("Warning: bfloat16 is not well supported on MPS, falling back to float16")
-            weight_dtype = torch.float16
+        # MPS: fp16 causes dtype mismatches with Conv3d fallback and some MPS ops.
+        # bf16 is also not well supported. Use fp32 on MPS for reliability.
+        if is_mps and weight_dtype != torch.float32:
+            print(f"[MPS] Overriding weight_dtype from {config.weight_dtype} to fp32 for MPS compatibility")
+            weight_dtype = torch.float32
 
         whisper = WhisperModel.from_pretrained(os.path.join(BASE_DIR, 'checkpoints/whisper-tiny/')).to(device).eval()
         
