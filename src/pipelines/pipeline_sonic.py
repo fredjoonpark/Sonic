@@ -17,7 +17,6 @@ from diffusers import (
 )
 
 from src.models.base.unet_spatio_temporal_condition import UNetSpatioTemporalConditionModel
-from src.utils.mps_patch import on_cpu_if_mps
 
 logger = logging.get_logger(__name__)
 
@@ -181,21 +180,17 @@ class SonicPipeline(DiffusionPipeline):
         forward_vae_fn = self.vae._orig_mod.forward if is_compiled_module(self.vae) else self.vae.forward
         accepts_num_frames = "num_frames" in set(inspect.signature(forward_vae_fn).parameters.keys())
 
-        # Move VAE to CPU for decoding on MPS (Conv3d not supported on Metal)
-        device = self._execution_device
-        with on_cpu_if_mps(self.vae, device) as vae_device:
-            latents = latents.to(device=vae_device, dtype=self.vae.dtype)
-            # decode decode_chunk_size frames at a time to avoid OOM
-            frames = []
-            for i in range(0, latents.shape[0], decode_chunk_size):
-                num_frames_in = latents[i : i + decode_chunk_size].shape[0]
-                decode_kwargs = {}
-                if accepts_num_frames:
-                    # we only pass num_frames_in if it's expected
-                    decode_kwargs["num_frames"] = num_frames_in
+        # decode decode_chunk_size frames at a time to avoid OOM
+        frames = []
+        for i in range(0, latents.shape[0], decode_chunk_size):
+            num_frames_in = latents[i : i + decode_chunk_size].shape[0]
+            decode_kwargs = {}
+            if accepts_num_frames:
+                # we only pass num_frames_in if it's expected
+                decode_kwargs["num_frames"] = num_frames_in
 
-                frame = self.vae.decode(latents[i : i + decode_chunk_size], **decode_kwargs).sample
-                frames.append(frame.cpu())
+            frame = self.vae.decode(latents[i : i + decode_chunk_size], **decode_kwargs).sample
+            frames.append(frame.cpu())
         frames = torch.cat(frames, dim=0)
 
         # [batch*frames, channels, height, width] -> [batch, channels, frames, height, width]
@@ -251,7 +246,6 @@ class SonicPipeline(DiffusionPipeline):
             _dev = torch.device(device) if isinstance(device, str) else device
             rand_device = "cpu" if _dev.type == "mps" else device
             noise = randn_tensor(shape, generator=generator, device=rand_device, dtype=dtype)
-            noise = noise.to(device)
             noise = noise.to(device)
         else:
             noise = latents.to(device)
@@ -450,35 +444,34 @@ class SonicPipeline(DiffusionPipeline):
         if needs_upcasting:
             self.vae.to(dtype=torch.float32)
         
-        # Prepare ref image latents — move VAE to CPU on MPS for Conv3d compat
-        with on_cpu_if_mps(self.vae, device) as vae_device:
-            ref_image_tensor = ref_image.to(
-                dtype=self.vae.dtype, device=vae_device
-            )
-     
-            ref_image_latents = self.vae.encode(ref_image_tensor).latent_dist.mean
-            ref_image_latents = ref_image_latents * 0.18215  # (b, 4, h, w)
+        # Prepare ref image latents
+        ref_image_tensor = ref_image.to(
+            dtype=self.vae.dtype, device=self.vae.device
+        )
+ 
+        ref_image_latents = self.vae.encode(ref_image_tensor).latent_dist.mean
+        ref_image_latents = ref_image_latents * 0.18215  # (b, 4, h, w)
 
-            # MPS: generate noise on CPU to avoid generator issues
-            noise = randn_tensor(
-                ref_image_tensor.shape, 
-                generator=generator, 
-                device="cpu", 
-                dtype=self.vae.dtype)
-            noise = noise.to(vae_device)
-            
-            ref_image_tensor = ref_image_tensor + noise_aug_strength * noise
+        # MPS: generate noise on CPU to avoid generator issues
+        _vae_dev = torch.device(self.vae.device) if isinstance(self.vae.device, str) else self.vae.device
+        rand_device = torch.device("cpu") if _vae_dev.type == "mps" else self.vae.device
+        noise = randn_tensor(
+            ref_image_tensor.shape, 
+            generator=generator, 
+            device=rand_device, 
+            dtype=self.vae.dtype)
+        noise = noise.to(self.vae.device)
+        
+        ref_image_tensor = ref_image_tensor + noise_aug_strength * noise
 
-            image_latents = self._encode_vae_image(
-                ref_image_tensor,
-                device=vae_device,
-                num_videos_per_prompt=num_videos_per_prompt,
-                do_classifier_free_guidance=do_classifier_free_guidance,
-            )
-
-        # Move results back to main device
-        ref_image_latents = ref_image_latents.to(device=device, dtype=image_embeddings.dtype)
-        image_latents = image_latents.to(device=device, dtype=image_embeddings.dtype)
+        image_latents = self._encode_vae_image(
+            ref_image_tensor,
+            device=device,
+            num_videos_per_prompt=num_videos_per_prompt,
+            do_classifier_free_guidance=do_classifier_free_guidance,
+        )
+        image_latents = image_latents.to(image_embeddings.dtype)
+        ref_image_latents = ref_image_latents.to(image_embeddings.dtype)
         
         # cast back to fp16 if needed
         if needs_upcasting:
