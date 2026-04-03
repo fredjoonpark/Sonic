@@ -1,11 +1,6 @@
 import os
 import torch
 import torch.utils.checkpoint
-
-# Patch Conv3d for MPS — must happen before any model construction
-from src.utils.mps_patch import patch_conv3d_for_mps
-patch_conv3d_for_mps()
-
 from PIL import Image
 import numpy as np
 from omegaconf import OmegaConf
