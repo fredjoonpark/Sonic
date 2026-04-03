@@ -1,11 +1,14 @@
-import gradio as gr
 import os
+# Must be set before torch is imported to enable CPU fallback for unsupported MPS ops (e.g. Conv3d)
+os.environ.setdefault('PYTORCH_ENABLE_MPS_FALLBACK', '1')
+
+import gradio as gr
 import numpy as np
 from pydub import AudioSegment
 import hashlib
 from sonic import Sonic
 
-pipe = Sonic('auto')
+pipe = Sonic('mps')
 
 def get_md5(content):
     md5hash = hashlib.md5(content)

@@ -10,3 +10,6 @@ omegaconf==2.3.0
 tqdm==4.65.2
 librosa==0.10.2.post1
 einops==0.7.0
+opencv-python>=4.8.0
+numpy<2.0.0
+pydub>=0.25.1

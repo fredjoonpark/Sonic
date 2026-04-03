@@ -1,4 +1,7 @@
 import os
+# Must be set before torch is imported to enable CPU fallback for unsupported MPS ops (e.g. Conv3d)
+os.environ.setdefault('PYTORCH_ENABLE_MPS_FALLBACK', '1')
+
 import argparse
 from sonic import Sonic
 
@@ -9,8 +12,8 @@ parser.add_argument('output_path')
 parser.add_argument('--dynamic_scale', type=float, default=1.0)
 parser.add_argument('--crop', action='store_true')
 parser.add_argument('--seed', type=int, default=None)
-parser.add_argument('--device', type=str, default='auto',
-                    help='Device to use: auto, cuda, cuda:0, mps, cpu (default: auto)')
+parser.add_argument('--device', type=str, default='mps',
+                    help='Device to use: auto, cuda, cuda:0, mps, cpu (default: mps)')
 
 args = parser.parse_args()
 
