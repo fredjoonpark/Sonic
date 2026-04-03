@@ -2,9 +2,9 @@ import os
 import torch
 import torch.utils.checkpoint
 
-# Enable MPS fallback for unsupported ops (e.g. Conv3d) on Apple Silicon
-if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-    os.environ.setdefault('PYTORCH_ENABLE_MPS_FALLBACK', '1')
+# Patch Conv3d for MPS — must happen before any model construction
+from src.utils.mps_patch import patch_conv3d_for_mps
+patch_conv3d_for_mps()
 
 from PIL import Image
 import numpy as np
