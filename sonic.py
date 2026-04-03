@@ -23,6 +23,35 @@ from src.dataset.face_align.align import AlignImage
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+
+def get_device(device_id=0):
+    """Resolve the best available device.
+    
+    device_id >= 0  → try cuda:<id>
+    device_id == -1 → cpu
+    device_id == -2 → auto-detect (cuda > mps > cpu)
+    Also accepts string values: 'cuda', 'mps', 'cpu', 'auto'
+    """
+    if isinstance(device_id, str):
+        if device_id == 'auto':
+            device_id = -2
+        else:
+            return device_id  # trust the caller ('mps', 'cpu', 'cuda:0', etc.)
+
+    if device_id >= 0:
+        if torch.cuda.is_available():
+            return f'cuda:{device_id}'
+        # Requested CUDA but unavailable — fall through to auto-detect
+    elif device_id == -1:
+        return 'cpu'
+
+    # Auto-detect
+    if torch.cuda.is_available():
+        return 'cuda:0'
+    if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        return 'mps'
+    return 'cpu'
+
 def test(
     pipe,
     config,
@@ -134,14 +163,19 @@ class Sonic():
         config = self.config
         config.use_interframe = enable_interpolate_frame
 
-        device = 'cuda:{}'.format(device_id) if device_id > -1 else 'cpu'
+        device = get_device(device_id)
+        is_mps = (torch.device(device).type == 'mps')
 
         config.pretrained_model_name_or_path = os.path.join(BASE_DIR, config.pretrained_model_name_or_path)
+
+        # MPS doesn't always play well with fp16 safetensor variants during loading,
+        # so we skip the variant kwarg and let the models load in fp32, then cast later.
+        variant_kwargs = {} if is_mps else {"variant": "fp16"}
 
         vae = AutoencoderKLTemporalDecoder.from_pretrained(
             config.pretrained_model_name_or_path, 
             subfolder="vae",
-            variant="fp16")
+            **variant_kwargs)
         
         val_noise_scheduler = EulerDiscreteScheduler.from_pretrained(
             config.pretrained_model_name_or_path, 
@@ -150,11 +184,11 @@ class Sonic():
         image_encoder = CLIPVisionModelWithProjection.from_pretrained(
             config.pretrained_model_name_or_path, 
             subfolder="image_encoder",
-            variant="fp16")
+            **variant_kwargs)
         unet = UNetSpatioTemporalConditionModel.from_pretrained(
             config.pretrained_model_name_or_path,
             subfolder="unet",
-            variant="fp16")
+            **variant_kwargs)
         add_ip_adapters(unet, [32], [config.ip_audio_scale])
         
         audio2token = AudioProjModel(seq_len=10, blocks=5, channels=384, intermediate_dim=1024, output_dim=1024, context_tokens=32).to(device)
@@ -190,6 +224,11 @@ class Sonic():
             raise ValueError(
                 f"Do not support weight dtype: {config.weight_dtype} during training"
             )
+
+        # MPS: bf16 is not well supported, fall back to fp16
+        if is_mps and weight_dtype == torch.bfloat16:
+            print("Warning: bfloat16 is not well supported on MPS, falling back to float16")
+            weight_dtype = torch.float16
 
         whisper = WhisperModel.from_pretrained(os.path.join(BASE_DIR, 'checkpoints/whisper-tiny/')).to(device).eval()
         

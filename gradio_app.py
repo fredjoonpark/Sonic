@@ -5,7 +5,7 @@ from pydub import AudioSegment
 import hashlib
 from sonic import Sonic
 
-pipe = Sonic(0)
+pipe = Sonic('auto')
 
 def get_md5(content):
     md5hash = hashlib.md5(content)

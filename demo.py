@@ -1,8 +1,6 @@
 import os
 import argparse
 from sonic import Sonic
-pipe = Sonic(0)
-
 
 parser = argparse.ArgumentParser()
 parser.add_argument('image_path')
@@ -11,8 +9,12 @@ parser.add_argument('output_path')
 parser.add_argument('--dynamic_scale', type=float, default=1.0)
 parser.add_argument('--crop', action='store_true')
 parser.add_argument('--seed', type=int, default=None)
+parser.add_argument('--device', type=str, default='auto',
+                    help='Device to use: auto, cuda, cuda:0, mps, cpu (default: auto)')
 
 args = parser.parse_args()
+
+pipe = Sonic(args.device)
 
 
 face_info = pipe.preprocess(args.image_path, expand_ratio=0.5)

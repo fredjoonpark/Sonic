@@ -3,7 +3,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 from .warplayer import warp
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def _get_device():
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+device = _get_device()
 
 def conv(in_planes, out_planes, kernel_size=3, stride=1, padding=1, dilation=1):
     return nn.Sequential(

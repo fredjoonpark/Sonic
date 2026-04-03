@@ -242,7 +242,12 @@ class SonicPipeline(DiffusionPipeline):
             )
 
         if latents is None:
-            noise = randn_tensor(shape, generator=generator, device=device, dtype=dtype)
+            # MPS: generators are not reliably supported, so generate noise on CPU and move
+            _dev = torch.device(device) if isinstance(device, str) else device
+            rand_device = "cpu" if _dev.type == "mps" else device
+            noise = randn_tensor(shape, generator=generator, device=rand_device, dtype=dtype)
+            noise = noise.to(device)
+            noise = noise.to(device)
         else:
             noise = latents.to(device)
 
@@ -448,11 +453,14 @@ class SonicPipeline(DiffusionPipeline):
         ref_image_latents = self.vae.encode(ref_image_tensor).latent_dist.mean
         ref_image_latents = ref_image_latents * 0.18215  # (b, 4, h, w)
 
+        # MPS: generate noise on CPU to avoid generator issues
+        rand_device = torch.device("cpu") if self.vae.device.type == "mps" else self.vae.device
         noise = randn_tensor(
             ref_image_tensor.shape, 
             generator=generator, 
-            device=self.vae.device, 
+            device=rand_device, 
             dtype=self.vae.dtype)
+        noise = noise.to(self.vae.device)
         
         ref_image_tensor = ref_image_tensor + noise_aug_strength * noise
 
